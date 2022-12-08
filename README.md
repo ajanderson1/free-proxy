@@ -9,7 +9,7 @@ pip install git+https://${GITHUB_TOKEN}@github.com/ajanderson1/free_proxy -vvv
 
 ## Usage:
 ```python
-from free_proxy import *
+from free-proxy import *
 ```
 
 ### Get full proxy list
