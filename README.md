@@ -4,7 +4,7 @@ Simple free proxy scraper and validator
 
 ## Installation
 ```bash
-pip install git+https://${GITHUB_TOKEN}@github.com/ajanderson1/espc-scraper -vvv
+pip install git+https://${GITHUB_TOKEN}@github.com/ajanderson1/free_proxy -vvv
 ```
 
 ## Usage:
