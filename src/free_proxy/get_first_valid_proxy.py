@@ -1,4 +1,4 @@
-from . import validate_proxy
+from .free_proxy import validate_proxy
 import random
 
 import logging
