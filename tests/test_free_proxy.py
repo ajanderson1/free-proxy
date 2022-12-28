@@ -1,6 +1,6 @@
 import pytest
 
-from free_proxy import *
+from src.free_proxy import *
 
 import logging
 log = logging.getLogger()
