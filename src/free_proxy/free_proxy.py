@@ -25,7 +25,7 @@ def proxy_list() -> list:
         "Pragma": "no-cache"
     }
     r = requests.get(FREE_PROXY_LIST_URL, headers=headers)
-    soup = BeautifulSoup(r.content, features="lxml")
+    soup = BeautifulSoup(r.content, "html.parser")
 
     table = soup.find('table', {'class': 'table table-striped table-bordered'})
     proxy_list = []
