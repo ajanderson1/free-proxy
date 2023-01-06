@@ -141,7 +141,8 @@ def check_proxy(proxy: dict | str) -> bool:
 
     try:
         log.debug(f"Testing proxy: {proxy}")
-        response = requests.get(PROXY_VALIDATION_URL, proxies={"http": proxy, "https": proxy}, timeout=PROXY_VALIDATION_TIMEOUT)
+        # response = requests.get(PROXY_VALIDATION_URL, proxies={"http": proxy, "https": proxy}, timeout=PROXY_VALIDATION_TIMEOUT)
+        response = requests.get(PROXY_VALIDATION_URL, proxies={"http": f"http://{proxy}", "https": f"http://{proxy}"}, timeout=PROXY_VALIDATION_TIMEOUT)
         if response.status_code != 200:
             raise RequestException(f"Status Code: {response.status_code}") 
         log.info(f"Proxy: {proxy} is valid (status_code: {response.status_code}))")
@@ -168,7 +169,7 @@ def get_all_operational_proxies(
         if check_proxy(proxy):
             valid_proxies.append(proxy)
     if not valid_proxies:
-        log.warning(f"No valid proxies found - tried {len(proxies)} proxies")
+        log.warning(f"No valid proxies found - tried {len(proxies)} proxies (HINT: This maybe due to the `filter_by` argument returning no results)")
     return [_format_proxy_as_str(proxy) for proxy in valid_proxies]
 
 

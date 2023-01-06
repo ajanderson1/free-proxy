@@ -1,5 +1,9 @@
 # CHANGELOG
 
+## Version 2.1.2
+ Updated to use urllib3 1.26.13 - NB: This is required.
+
+
 ## Version 2.1.1
 
 ### Major Changes
