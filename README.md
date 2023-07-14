@@ -19,7 +19,7 @@ from free_proxy import get_first_operational_proxy, get_all_operational_proxies,
 
 ### Get first operational proxy (matching optional filters)
 ```python
-# Returns the first valid proxy that is found (by random) in fromat "ip:port"
+# Returns the first valid proxy that is found (by random), in fromat "ip:port"
 get_first_operational_proxy(filter_by={
     'code':'my_code', 
     'country':'my_country', 
@@ -27,9 +27,9 @@ get_first_operational_proxy(filter_by={
     })
 ```
 
-### Get All operational proxies (matching optional filters)
+### Get All operational proxies (matching optional filters)
 ```python
-# Returns a list of all valid proxies that are found in format "ip:port"
+# Returns a list of all valid proxies found, in format "ip:port"
 get_all_operational_proxies(filter_by={
     'code':'my_code', 
     'country':'my_country', 

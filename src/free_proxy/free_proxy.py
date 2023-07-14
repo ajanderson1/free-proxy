@@ -3,6 +3,7 @@ import requests
 from requests.exceptions import RequestException
 
 import random
+import time
 
 import logging
 log = logging.getLogger(__name__)
@@ -12,12 +13,48 @@ logging.basicConfig(level=logging.INFO)
 FREE_PROXY_LIST_URL = "https://free-proxy-list.net"
 FREE_PROXY_LIST_URL_UK = "https://free-proxy-list.net/uk-proxy.html"
 
+SPEEDX_PROXY_LIST_URL = "https://raw.githubusercontent.com/TheSpeedX/SOCKS-List/master/http.txt"
+
 PROXY_VALIDATION_URL = "https://www.google.com"
 PROXY_VALIDATION_TIMEOUT = 5
 
-def get_proxy_list() -> list:
-    """  Returns a dict of proxies scraped from web (https://free-proxy-list.net) """
+
+def download_and_parse_proxies(url):
+    """ Downloads and parses proxies from a line separated text file in format: ip:port"""
+    try:
+        response = requests.get(url)
+        response.raise_for_status()
+        proxy_data = response.text.splitlines()
+        proxies = []
+
+        for line in proxy_data:
+            ip, port = line.strip().split(":")
+            proxy = {'ip': ip, 'port': port}
+            proxies.append(proxy)
+
+        return proxies
+    except requests.exceptions.RequestException as e:
+        log.warning(f"Error occurred during download: {e}")
+        return []
     
+
+def get_proxy_list(source='TheSpeedX/PROXY-List') -> list:
+    """  Returns a dict of proxies scraped from web (https://free-proxy-list.net) """
+
+    if source == 'TheSpeedX/PROXY-List':
+
+        # Download, parse and return proxies
+        return download_and_parse_proxies(SPEEDX_PROXY_LIST_URL)
+
+    elif source == 'free-proxy-list.net':
+        return get_proxy_list_from_web()
+
+    else:
+        raise ValueError(f"Invalid source: {source}. Valid options are: ['TheSpeedX/PROXY-List', 'free-proxy-list.net']")
+
+
+
+def get_proxy_list_from_web() -> list:
     headers: dict = {
         'Cache-Control': 'no-cache',
         "Pragma": "no-cache"
@@ -42,12 +79,14 @@ def get_proxy_list() -> list:
     return proxy_list
 
 
+
 def _filter_proxy_list(
                     proxy_list: list,
                     filter_by: dict = None
                     )-> list:
     """ 
-    Retrieves and filters free proxies (based on: ip, port, code, country, anonymity, google, https, last_checked)
+    Filters proxies (based on: ip, port, code, country, anonymity, google, https, last_checked)
+    
     Params:
         -   proxy_list (OPTIONAL): list of proxies to filter (if None, will retrieve from web)
     Returns:
@@ -71,7 +110,7 @@ def _filter_proxy_list(
         if not results:
             log.warning(f"Filtering by: {filter_by} returned no results, returning empty list")
     else:
-        log.warning("No `filter_by` argument passed in. Returning all proxies.")
+        log.warning("No `filter_by` argument passed in to _filter_by().")
         results = proxy_list
         
     return results
@@ -148,7 +187,7 @@ def check_proxy(proxy: dict | str) -> bool:
         log.info(f"Proxy: {proxy} is valid (status_code: {response.status_code}))")
         return True
     except Exception as e:
-        log.error(f"Proxy: {proxy} is invalid - Exception: {e.__class__.__name__}")
+        log.debug(f"Proxy: {proxy} is invalid - Exception: {e.__class__.__name__}")
         return False
 
 
@@ -173,22 +212,27 @@ def get_all_operational_proxies(
     return [_format_proxy_as_str(proxy) for proxy in valid_proxies]
 
 
-def get_first_operational_proxy(
-                filter_by:dict=None,
-                proxy_list:list=None
-                ) -> dict:
-    """ Returns first valid proxy from the list of passed in proxies (defaults to list from ) """
+def get_first_operational_proxy(filter_by: dict = None, proxy_list: list = None, randomise:bool=True) -> dict:
+    """Returns the first valid proxy from the list of passed-in proxies (defaults to list from get_proxy_list)"""
+
+    # Step 1: Measure the time taken
+    start_time = time.time()
+
     if not proxy_list:
-        proxy_list = get_proxy_list()
+        proxy_list = get_proxy_list(source='TheSpeedX/PROXY-List')
     else:
-        log.warning("Using custom proxy list, this is not recommended.")
-    
+        log.warning("Using a custom proxy list, this should be formatted as a list of dicts in format: [{'ip': 'port', 'ip': 'port'}, ...]")
+
+    # Step 2: Randomize the list of proxies
+    if randomise:
+        random.shuffle(proxy_list)
+
     proxies = _filter_proxy_list(proxy_list, filter_by=filter_by)
     for count, proxy in enumerate(proxies, start=1):
         if check_proxy(proxy):
-            log.debug(f"Trying proxy:  ({count} of {len(proxies)})")
-            log.info(f"First valid proxy found: {proxy}")
+            elapsed_time = time.time() - start_time
+            log.info(f"Returning: {proxy}. ({count} of {len(proxies)}) proxies tried. {elapsed_time:.2f} seconds")
             return _format_proxy_as_str(proxy)
-    raise ValueError("No valid proxies found")
 
+    raise ValueError("No valid proxies found")
 

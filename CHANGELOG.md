@@ -1,5 +1,9 @@
 # CHANGELOG
 
+## Version 2.2.0
+ * Added in support for [SpeedX Proxy List](https://github.com/TheSpeedX/PROXY-List)
+ * Added randomisation of proxy list order in get_first_operational_proxy()
+
 ## Version 2.1.2
  Updated to use urllib3 1.26.13 - NB: This is required.
 
