@@ -1,1 +1,1 @@
-from free_proxy.free_proxy import get_first_operational_proxy, get_all_operational_proxies, check_proxy
+from free_proxy.free_proxy import *

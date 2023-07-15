@@ -1,29 +1,56 @@
 from bs4 import BeautifulSoup
 import requests
 from requests.exceptions import RequestException
-
 import random
 import time
-
 import logging
+
 log = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
 
-
 FREE_PROXY_LIST_URL = "https://free-proxy-list.net"
-FREE_PROXY_LIST_URL_UK = "https://free-proxy-list.net/uk-proxy.html"
-
 SPEEDX_PROXY_LIST_URL = "https://raw.githubusercontent.com/TheSpeedX/SOCKS-List/master/http.txt"
 
 PROXY_VALIDATION_URL = "https://www.google.com"
 PROXY_VALIDATION_TIMEOUT = 5
 
 
-def download_and_parse_proxies(url):
-    """ Downloads and parses proxies from a line separated text file in format: ip:port"""
-    try:
-        response = requests.get(url)
-        response.raise_for_status()
+def get_first_operational_proxy():
+    """ for backwards compatibility """
+    log.warning("get_first_operational_proxy() is deprecated, please use ProxyListManager().return_first_operational_proxy() instead")
+    return ProxyListManager().return_n_operational_proxies(n=1)[0]
+
+
+class ProxyDownloader:
+    """
+    Abstract class for downloading and parsing proxies from a given URL
+    """
+
+    def download_and_parse(self, url):
+        raise NotImplementedError
+
+    @staticmethod
+    def _get_response(url):
+        try:
+            response = requests.get(url)
+            response.raise_for_status()
+            return response
+        except requests.exceptions.RequestException as e:
+            log.warning(f"Error occurred during download: {e}")
+            raise
+
+
+class SpeedXProxyDownloader(ProxyDownloader):
+    def download_and_parse(self, url=SPEEDX_PROXY_LIST_URL):
+        response = self._get_response(url)
+        if not response:
+            return []
+
+        # get the last_modified date from the file header
+        last_modified = response.headers.get('Last-Modified')
+        if last_modified:
+            log.critical(f"Last-Modified: {last_modified}")
+
         proxy_data = response.text.splitlines()
         proxies = []
 
@@ -33,206 +60,162 @@ def download_and_parse_proxies(url):
             proxies.append(proxy)
 
         return proxies
-    except requests.exceptions.RequestException as e:
-        log.warning(f"Error occurred during download: {e}")
-        return []
-    
-
-def get_proxy_list(source='TheSpeedX/PROXY-List') -> list:
-    """  Returns a dict of proxies scraped from web (https://free-proxy-list.net) """
-
-    if source == 'TheSpeedX/PROXY-List':
-
-        # Download, parse and return proxies
-        return download_and_parse_proxies(SPEEDX_PROXY_LIST_URL)
-
-    elif source == 'free-proxy-list.net':
-        return get_proxy_list_from_web()
-
-    else:
-        raise ValueError(f"Invalid source: {source}. Valid options are: ['TheSpeedX/PROXY-List', 'free-proxy-list.net']")
 
 
+class FreeProxyListDownloader(ProxyDownloader):
+    def download_and_parse(self, url=FREE_PROXY_LIST_URL):
+        headers = {
+            'Cache-Control': 'no-cache',
+            "Pragma": "no-cache"
+        }
+        response = self._get_response(url)
+        if not response:
+            return []
 
-def get_proxy_list_from_web() -> list:
-    headers: dict = {
-        'Cache-Control': 'no-cache',
-        "Pragma": "no-cache"
+        soup = BeautifulSoup(response.content, "html.parser")
+        table = soup.find('table', {'class': 'table table-striped table-bordered'})
+
+        #  ensure table is found
+        if not table:
+            log.warning(f"BS4 failed to find table in response from {url}")
+            return []
+
+        proxy_list = []
+        for row in table.tbody.findAll('tr'):
+            proxy = {
+                'ip': row.find_all('td')[0].text,
+                'port': row.find_all('td')[1].text,
+                'code': row.find_all('td')[2].text,
+                'country': row.find_all('td')[3].text,
+                'anonymity': row.find_all('td')[4].text,
+                'google': row.find_all('td')[5].text,
+                'https': row.find_all('td')[6].text,
+                'last_checked': row.find_all('td')[7].text
+            }
+            proxy_list.append(proxy)
+        log.debug(f"Retrieved {len(proxy_list)} proxies from web")
+        return proxy_list
+
+
+class ProxyListManager:
+    """
+    A class for managing a list of proxies from a given source
+
+    Usage:
+    To initialise a ProxyListManager with a list of proxies from a given source:
+        proxy_list = ProxyListManager(source='TheSpeedX/PROXY-List')  # ...or source='free-proxy-list.net'
+
+    To return the first operational proxy by random from the list:
+        proxy_list.get_first_operational_proxy()
+
+    To return the first operational proxy by random from the list that matches a given filter:
+        proxy_list.get_first_operational_proxy(filter_by={'country': 'United Kingdom', 'https': 'yes'})
+
+    """
+
+    proxy_downloader = {
+        'TheSpeedX/PROXY-List': SpeedXProxyDownloader,
+        'free-proxy-list.net': FreeProxyListDownloader
     }
-    r = requests.get(FREE_PROXY_LIST_URL, headers=headers)
-    soup = BeautifulSoup(r.content, "html.parser")
 
-    table = soup.find('table', {'class': 'table table-striped table-bordered'})
-    proxy_list = []
-    for row in table.tbody.findAll('tr'):
-        proxy_single_result = {}
-        proxy_single_result['ip'] = row.find_all('td')[0].text
-        proxy_single_result['port'] = row.find_all('td')[1].text
-        proxy_single_result['code'] = row.find_all('td')[2].text
-        proxy_single_result['country'] = row.find_all('td')[3].text
-        proxy_single_result['anonymity'] = row.find_all('td')[4].text
-        proxy_single_result['google'] = row.find_all('td')[5].text
-        proxy_single_result['https'] = row.find_all('td')[6].text
-        proxy_single_result['last_checked'] = row.find_all('td')[7].text
-        proxy_list.append(proxy_single_result)
-    log.debug(f"Retrieved {len(proxy_list)} proxies from web")
-    return proxy_list
+    def __init__(self, source='TheSpeedX/PROXY-List', timeout=5):
+        self.source = source
+        self.proxies = []
+        self.download_proxies()
+        self.timeout = timeout
 
+    def download_proxies(self):
+        if self.source not in self.proxy_downloader:
+            raise ValueError(f"Invalid source: {self.source}. Valid options are: {list(self.proxy_downloader.keys())}")
 
+        downloader = self.proxy_downloader[self.source]()
+        self.proxies = downloader.download_and_parse()
 
-def _filter_proxy_list(
-                    proxy_list: list,
-                    filter_by: dict = None
-                    )-> list:
-    """ 
-    Filters proxies (based on: ip, port, code, country, anonymity, google, https, last_checked)
-    
-    Params:
-        -   proxy_list (OPTIONAL): list of proxies to filter (if None, will retrieve from web)
-    Returns:
-        -   list of dicts in format: [{'ip': 'port', 'ip': 'port'}, ...]
-            (or [], if filter matches no proxies.)
+    def list_proxies(self):
+        return self.proxies
 
-    """        
-    _validate_proxy_list(proxy_list)
+    def list_filterable_keys(self):
+        return list(self.proxies[0].keys())
 
-    if filter_by:
-        # Validate that `filter_by` is a dict
+    def filter_proxies(self, filter_by=None):
+        if not filter_by:
+            log.debug("No `filter_by` argument passed in to _filter_by().")
+            return self.proxies
+
         if not isinstance(filter_by, dict):
             raise TypeError("`filter_by` must be a dict")
-        # Validate that all keys in `filter_by` are present in first item of `proxy_list` (already established that all keys are uniform)
-        if not all([k in proxy_list[0] for k in filter_by]):
-            invalid_keys = [k for k in filter_by if k not in proxy_list[0]]
-            raise TypeError(f"`filter_by` contains invalid keys: {invalid_keys}.  All `filter_by` keys must be in the `proxy_list`, valid options are: {list(proxy_list[0].keys())}")
-        
-        filter_func = lambda proxy: [proxy[filter_k] == filter_v for filter_k, filter_v in filter_by.items()]
-        results = [proxy for proxy in proxy_list if all(filter_func(proxy))] if filter_by else [{proxy['ip']: proxy['port']} for proxy in proxy_list]
+
+        if not all([k in self.proxies[0] for k in filter_by]):
+            invalid_keys = [k for k in filter_by if k not in self.proxies[0]]
+            raise TypeError(f"`filter_by` contains invalid keys: {invalid_keys}.  All `filter_by` keys must be in the `proxy_list`, valid options are: {list(self.proxies[0].keys())}")
+
+
+        def filter_func(proxy): return [proxy[filter_k] == filter_v for filter_k, filter_v in filter_by.items()]
+        results = [proxy for proxy in self.proxies if all(filter_func(proxy))]
+
         if not results:
-            log.warning(f"Filtering by: {filter_by} returned no results, returning empty list")
-    else:
-        log.warning("No `filter_by` argument passed in to _filter_by().")
-        results = proxy_list
-        
-    return results
+            log.warning(f"Filtering by: {filter_by} returned no results, returning empty list. HINT ...")
+            # Assist user with some sample values for each filter_by key they specified.
+            sample_size:int  = len(self.proxies) if len(self.proxies) < 3 else 3
+            [log.critical(f"Filtering by: '{this_filter_by}' - Sample values: {[proxy[this_filter_by] for proxy in random.sample(self.proxies, sample_size)]}") for this_filter_by in filter_by]
+
+        return results
+
+    def return_n_operational_proxies(self, n=3, filter_by=None, randomise=True):
+        if not isinstance(n, int):
+            raise TypeError("`n` must be an integer")
+
+        if n < 1:
+            raise ValueError("`n` must be greater than 0")
+
+        if len(self.proxies) == 0:
+            raise ValueError("No proxies found in list. HINT: Did you forget to call `download_proxies()`?")
+
+        start_time = time.time()
+        filtered_proxies = self.proxies
+
+        filtered_proxies = self.filter_proxies(filter_by)
+
+        if randomise:
+            random.shuffle(filtered_proxies)
+
+        operational_proxies = []
+        for count, proxy in enumerate(filtered_proxies, start=1):
+            if ProxyValidator.check_proxy(proxy, timeout=self.timeout or 5):
+                operational_proxies.append(ProxyValidator.format_proxy_as_str(proxy))
+                if len(operational_proxies) == n:
+                    elapsed_time = time.time() - start_time
+                    log.info(f"Returning: {operational_proxies}. ({count} of {len(filtered_proxies)}) proxies tried. {elapsed_time:.2f} seconds")
+                    return operational_proxies
+
+        raise ValueError(f"Only {len(operational_proxies)} valid proxies found, {n} requested")
 
 
-def _validate_proxy_list(proxy_list: list) -> list:
-    """ 
-    Validates a list of proxies. Raises TypeError if invalid.
-    Params:
-        -   proxy_list (list): list of proxies to validate
-    Exceptions, raises:
-        -   TypeError: if `proxy_list` is passed in and not a list of dicts
-        -   TypeError: if `proxy_list` is passed in and each item is not a dict
-        -   TypeError: if `proxy_list` is passed in and each item contains invalid keys
-        -   TypeError: if `proxy_list` is passed in and each item does not contain the keys 'ip' and 'port'
+class ProxyValidator:
+    @staticmethod
+    def format_proxy_as_str(proxy):
+        if not isinstance(proxy, dict):
+            raise TypeError("`proxy` must be a dict")
+        return f"{proxy['ip']}:{proxy['port']}"
 
-    """
+    @staticmethod
+    def format_proxy_as_dict(proxy_str):
+        if not isinstance(proxy_str, str):
+            raise TypeError("`proxy_str` must be a string")
+        ip, port = proxy_str.split(":")
+        return {'ip': ip, 'port': port}
 
-    MANDATORY_KEYS = ['ip', 'port']
+    @staticmethod
+    def check_proxy(proxy, timeout=5):
+        proxy_str = ProxyValidator.format_proxy_as_str(proxy)
 
-    # Validate the proxy is a list
-    if not isinstance(proxy_list, list):
-        raise TypeError("`proxy_list` must be a list")
-
-    # Validate that each item in the list is a dict
-    if not all([isinstance(proxy, dict) for proxy in proxy_list]):
-        raise TypeError("`proxy_list` must be a list of dicts")
-    
-    # Validate that each item contains the same keys
-    if not all([all([k in proxy for k in proxy_list[0]]) for proxy in proxy_list]):
-        raise TypeError("`proxy_list` contains invalid keys.  Every item in list must contain uniform keys")
-    
-    # Validate that each item contains has the keys 'ip' and 'port'
-    if not all([all([k in proxy for k in MANDATORY_KEYS]) for proxy in proxy_list]):
-        raise TypeError(f"`proxy_list` must contain keys: {MANDATORY_KEYS}(at a minimum) for each item.")
-
-
-
-def _format_proxy_as_str(proxy: dict) -> dict:
-    """ Formats a proxy to the format: 'ip':'port' (e.g. '207.180.250.238:80')"""
-    # Validate that proxy is a dict and contains the keys 'ip' and 'port'
-    if not isinstance(proxy, dict):
-        raise TypeError("`proxy` must be a dict")
-    if not all([k in proxy for k in ['ip', 'port']]):
-        raise TypeError("`proxy` must contain the keys 'ip' and 'port'")
-    
-    return f"{proxy['ip']}:{proxy['port']}"
-
-
-def _format_proxy_as_dict(proxy: str) -> dict:
-    """ Formats a proxy to the format: {'ip':'port'} (e.g. 
-    """
-    # Validate that proxy is a string and contains the keys 'ip' and 'port'
-    if not isinstance(proxy, str):
-        raise TypeError("`proxy` must be a string") 
-    return {'ip': proxy.strip().replace(' ','').split(':')[0], 'port': proxy.replace(' ','').split(':')[1]}
-
-
-def check_proxy(proxy: dict | str) -> bool:
-    """ Returns True if proxy is valid, False if not """
-    if isinstance(proxy, dict):
-        proxy = _format_proxy_as_str(proxy)
-    elif isinstance(proxy, str):
-        pass
-    else:
-        raise TypeError("`proxy` must be a dict or string")
-
-    try:
-        log.debug(f"Testing proxy: {proxy}")
-        # response = requests.get(PROXY_VALIDATION_URL, proxies={"http": proxy, "https": proxy}, timeout=PROXY_VALIDATION_TIMEOUT)
-        response = requests.get(PROXY_VALIDATION_URL, proxies={"http": f"http://{proxy}", "https": f"http://{proxy}"}, timeout=PROXY_VALIDATION_TIMEOUT)
-        if response.status_code != 200:
-            raise RequestException(f"Status Code: {response.status_code}") 
-        log.info(f"Proxy: {proxy} is valid (status_code: {response.status_code}))")
-        return True
-    except Exception as e:
-        log.debug(f"Proxy: {proxy} is invalid - Exception: {e.__class__.__name__}")
-        return False
-
-
-def get_all_operational_proxies(
-                    filter_by:dict=None, 
-                    proxy_list:list=None
-                    ) -> dict:
-    """ Returns all valid proxies from the list of passed in proxies """
-    if not proxy_list:
-        proxy_list = get_proxy_list()
-    else:
-        log.warning("Using custom proxy list, this is not recommended.")
-    
-    proxies = _filter_proxy_list(proxy_list, filter_by=filter_by)
-    
-    valid_proxies = []
-    for count, proxy in enumerate(proxies, start=1):
-        if check_proxy(proxy):
-            valid_proxies.append(proxy)
-    if not valid_proxies:
-        log.warning(f"No valid proxies found - tried {len(proxies)} proxies (HINT: This maybe due to the `filter_by` argument returning no results)")
-    return [_format_proxy_as_str(proxy) for proxy in valid_proxies]
-
-
-def get_first_operational_proxy(filter_by: dict = None, proxy_list: list = None, randomise:bool=True) -> dict:
-    """Returns the first valid proxy from the list of passed-in proxies (defaults to list from get_proxy_list)"""
-
-    # Step 1: Measure the time taken
-    start_time = time.time()
-
-    if not proxy_list:
-        proxy_list = get_proxy_list(source='TheSpeedX/PROXY-List')
-    else:
-        log.warning("Using a custom proxy list, this should be formatted as a list of dicts in format: [{'ip': 'port', 'ip': 'port'}, ...]")
-
-    # Step 2: Randomize the list of proxies
-    if randomise:
-        random.shuffle(proxy_list)
-
-    proxies = _filter_proxy_list(proxy_list, filter_by=filter_by)
-    for count, proxy in enumerate(proxies, start=1):
-        if check_proxy(proxy):
-            elapsed_time = time.time() - start_time
-            log.info(f"Returning: {proxy}. ({count} of {len(proxies)}) proxies tried. {elapsed_time:.2f} seconds")
-            return _format_proxy_as_str(proxy)
-
-    raise ValueError("No valid proxies found")
-
+        try:
+            log.debug(f"Testing proxy: {proxy_str}")
+            response = requests.get(PROXY_VALIDATION_URL, proxies={"http": f"http://{proxy_str}", "https": f"http://{proxy_str}"}, timeout=timeout)
+            if response.status_code != 200:
+                raise RequestException(f"Status Code: {response.status_code}")
+            log.debug(f"Proxy: {proxy_str} is valid (status_code: {response.status_code})")
+            return True
+        except Exception as e:
+            log.debug(f"Proxy: {proxy_str} is invalid - Exception: {e.__class__.__name__}")
+            return False
