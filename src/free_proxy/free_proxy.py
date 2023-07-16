@@ -6,7 +6,6 @@ import time
 import logging
 
 log = logging.getLogger(__name__)
-logging.basicConfig(level=logging.INFO)
 
 FREE_PROXY_LIST_URL = "https://free-proxy-list.net"
 SPEEDX_PROXY_LIST_URL = "https://raw.githubusercontent.com/TheSpeedX/SOCKS-List/master/http.txt"
@@ -161,7 +160,7 @@ class ProxyListManager:
 
         return results
 
-    def return_n_operational_proxies(self, n=3, filter_by=None, randomise=True):
+    def return_n_operational_proxies(self, n=1, filter_by=None, randomise=True):
         if not isinstance(n, int):
             raise TypeError("`n` must be an integer")
 
@@ -185,7 +184,7 @@ class ProxyListManager:
                 operational_proxies.append(ProxyValidator.format_proxy_as_str(proxy))
                 if len(operational_proxies) == n:
                     elapsed_time = time.time() - start_time
-                    log.info(f"Returning: {operational_proxies}. ({count} of {len(filtered_proxies)}) proxies tried. {elapsed_time:.2f} seconds")
+                    log.debug(f"Returning: {operational_proxies}. ({count} of {len(filtered_proxies)}) proxies tried. {elapsed_time:.2f} seconds")
                     return operational_proxies
 
         raise ValueError(f"Only {len(operational_proxies)} valid proxies found, {n} requested")
