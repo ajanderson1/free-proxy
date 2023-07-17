@@ -6,6 +6,7 @@ import time
 import logging
 
 log = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO)
 
 FREE_PROXY_LIST_URL = "https://free-proxy-list.net"
 SPEEDX_PROXY_LIST_URL = "https://raw.githubusercontent.com/TheSpeedX/SOCKS-List/master/http.txt"
@@ -171,6 +172,8 @@ class ProxyListManager:
             raise ValueError("No proxies found in list. HINT: Did you forget to call `download_proxies()`?")
 
         start_time = time.time()
+
+        start_time = time.time()
         filtered_proxies = self.proxies
 
         filtered_proxies = self.filter_proxies(filter_by)
@@ -184,7 +187,7 @@ class ProxyListManager:
                 operational_proxies.append(ProxyValidator.format_proxy_as_str(proxy))
                 if len(operational_proxies) == n:
                     elapsed_time = time.time() - start_time
-                    log.debug(f"Returning: {operational_proxies}. ({count} of {len(filtered_proxies)}) proxies tried. {elapsed_time:.2f} seconds")
+                    log.info(f"Returning: {operational_proxies}. ({count} of {len(filtered_proxies)}) proxies tried. {elapsed_time:.2f} seconds")
                     return operational_proxies
 
         raise ValueError(f"Only {len(operational_proxies)} valid proxies found, {n} requested")
