@@ -173,7 +173,6 @@ class ProxyListManager:
 
         start_time = time.time()
 
-        start_time = time.time()
         filtered_proxies = self.proxies
 
         filtered_proxies = self.filter_proxies(filter_by)
