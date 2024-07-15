@@ -1,0 +1,29 @@
+[tool.poetry]
+name = "free-proxy-manager"
+version = "4.0.3"
+description = "The Proxy List Manager allows you to download, filter, and validate proxies from different sources. It uses a mixture of `BeautifulSoup` to scrape proxies from *'free-proxy-list.net'* and `requests` to download from '`[SpeedX/PROXY-List](https://github.com/TheSpeedX/PROXY-List).  It then includes functionality to check if the proxies are still operational and return the first *'n'* operational proxy."
+authors = ["ajanderson1 <ajanderson1@gmail.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.10"
+beautifulsoup4 = "^4.12.3"
+ipykernel = "^6.29.5"
+requests = "^2.32.3"
+click = "^8.1.7"
+
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.2.2"
+pytest-mock = "^3.14.0"
+loguru = "^0.7.2"
+coloredlogs = "^15.0.1"
+colorama = "^0.4.6"
+rich = {extras = ["jupyter"], version = "^13.7.1"}
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.poetry.scripts]
+proxy-manager = "free_proxy_manager.proxy_manager:cli"

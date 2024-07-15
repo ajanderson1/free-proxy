@@ -1,5 +1,11 @@
 # CHANGELOG
 
+## Version 4.0.3
+* Added CLI support (using Click)
+
+### TODO
+* Add in support for [ProxyScrape](https://proxyscrape.com/)
+
 ## Version 3.1.1
 * Refactored and tidied up.
 * get backwards compatibility for `get_first_operational_proxy()`
