@@ -1,21 +1,22 @@
 # Proxy Manager 
 
-A Python package for managing a list of proxies from various sources, validating their operability, and filtering them based on criteria. 
+A package for managing free proxies from various sources, validating their operability, and filtering them based on criteria.  Intended as way of automatically obtaining a working proxy from a various lists,
 
 ## Features
 - Download proxies from various sources. 
 - Validate proxies for operability. - Filter proxies based on criteria. 
-- Command-line interface (CLI) for easy usage. 
+- Added command-line interface using `click`.
 
 
 ## Installation 
 
-To install the package, use `poetry`:
+To install the package, using `poetry`:
 
 ```bash
+git clone https://github.com/ajanderson1/free-proxy-manager
+cd free-proxy-manager
 poetry install
 ```
-
 
 
 ## Usage
@@ -28,7 +29,7 @@ You can use the `ProxyManager` class directly in your Python code to download, f
 from free_proxy_manager.proxy_manager import ProxyManager
 
 # Initialize ProxyManager
-proxy_manager = ProxyManager(source='TheSpeedX/PROXY-List', timeout=5)
+proxy_manager = ProxyManager(source='free-proxy-list.net', timeout=5)
 
 # List all proxies
 proxies = proxy_manager.list_proxies()
@@ -49,11 +50,11 @@ The package includes a CLI for easy access to its functionalities.
 
 #### Basic Command
 
-`poetry run proxy-manager --source 'TheSpeedX/PROXY-List' --n 2 --timeout 5 --max_threads 10 --randomise`
+`poetry run proxy-manager --source 'free-proxy-list.net' --n 2 --timeout 5 --max_threads 10 --randomise`
 
 #### Options
 
-- `--source`: Source of proxies (default: 'TheSpeedX/PROXY-List').
+- `--source`: Source of proxies (default: 'free-proxy-list.net').
   
 - `--n`: Number of operational proxies to return (default: 1).
   
@@ -74,11 +75,7 @@ The package includes a CLI for easy access to its functionalities.
 
 - **Log to the console with DEBUG level**:
   
-  `poetry run proxy-manager --source 'TheSpeedX/PROXY-List' --n 2 --timeout 5 --filter_by 'country:US,https:yes' --max_threads 10 --randomise --log_level DEBUG`
-  
-- **Log to a file with INFO level**:
-  
-  `poetry run proxy-manager --source 'TheSpeedX/PROXY-List' --n 2 --timeout 5 --filter_by 'country:US,https:yes' --max_threads 10 --randomise --log_level INFO --log_file proxy_manager.log`
+  `poetry run proxy-manager --source 'free-proxy-list.net' --n 2 --timeout 5 --filter_by 'country:United States,https:yes' --max_threads 10 --log_level DEBUG`
   
 
 ## Configuration
@@ -93,7 +90,3 @@ To contribute to this project:
 2. Install dependencies using `poetry install`.
 3. Create a new branch for your feature or bugfix.
 4. Submit a pull request with your changes.
-
-## License
-
-This project is licensed under the MIT License. See the LICENSE file for details.
